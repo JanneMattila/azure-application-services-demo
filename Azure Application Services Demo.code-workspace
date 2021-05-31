@@ -4,10 +4,13 @@
 			"path": "."
 		}
 	],
-	"settings": {},
+	"settings": {
+		"debug.internalConsoleOptions": "neverOpen"
+	},
 	"extensions": {
 		"recommendations": [
-			"ms-vscode.powershell"
+			"ms-vscode.powershell",
+			"ms-azuretools.vscode-azurelogicapps"
 		]
 	}
 }

@@ -1,0 +1,5 @@
+{
+    "azureLogicAppsStandard.deploySubpath": "LogicApp",
+    "azureLogicAppsStandard.projectLanguage": "JavaScript",
+    "azureLogicAppsStandard.projectRuntime": "~3"
+}
