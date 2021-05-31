@@ -3,8 +3,9 @@ $arcName = "aks-arc"
 $customLocationName = "jannewest"
 $resourceGroup = "rg-k8s-appsvc-demo"
 $location = "westeurope"
-$extensionInstanceName = "appsvcextension"
 $namespace="appservice-ns"
+$extensionInstanceName = "appsvcextension"
+$namespace = "appservice-ns"
 $kubeAppServiceEnvironment = "kube-ase"
 
 # Login to Azure
@@ -81,7 +82,10 @@ $extensionId = az k8s-extension create -g $resourceGroup --name $extensionInstan
     --configuration-settings "buildService.storageClassName=default" `
     --configuration-settings "buildService.storageAccessMode=ReadWriteOnce" `
     --configuration-settings "customConfigMap=$namespace/kube-environment-config" `
-    --configuration-settings "envoy.annotations.service.beta.kubernetes.io/azure-load-balancer-resource-group=$resourceGroup"
+    --configuration-settings "envoy.annotations.service.beta.kubernetes.io/azure-load-balancer-resource-group=$resourceGroup" # `
+    # --configuration-settings "logProcessor.appLogs.destination=log-analytics" `
+    # --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.customerId=$logAnalyticsWorkspaceIdEnc" `
+    # --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.sharedKey=$logAnalyticsKeyEnc"
 
 # Verify install state
 # az k8s-extension show --name $extensionInstanceName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
@@ -94,7 +98,7 @@ kubectl get pods -n $namespace -l !app
 kubectl get svc -A
 
 # Create custom location
-az customlocation create -n $customLocationName --resource-group $resourceGroup --namespace arc --host-resource-id $connectedClusterId --cluster-extension-ids $extensionId
+az customlocation create -n $customLocationName --resource-group $resourceGroup --namespace $namespace --host-resource-id $connectedClusterId --cluster-extension-ids $extensionId
 $customLocationId=(az customlocation show -n $customLocationName --resource-group $resourceGroup --query id -o tsv)
 $customLocationId
 
@@ -112,11 +116,15 @@ az appservice kube show `
 
 # Create App Service
 $image = "jannemattila/echo"
-$appServiceName = "echo"
+$appServiceName = "echofromkube"
 $appServicePlanName = "asp"
 
 az appservice plan create --name $appServicePlanName --resource-group $resourceGroup --custom-location $customLocationId --is-linux --per-site-scaling --sku K1
 az webapp create --name $appServiceName --plan $appServicePlanName --custom-location $customLocationId --resource-group $resourceGroup -i $image -o table
+
+# Create Logic App
+az extension add --yes --source "https://aka.ms/logicapp-latest-py2.py3-none-any.whl"
+az logicapp create --resource-group $resourceGroup --name MyLogicAppName --custom-location $customLocationId
 
 # Wipe out the resources
 az group delete --name $resourceGroup -y
