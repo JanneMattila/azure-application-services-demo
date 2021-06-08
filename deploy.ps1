@@ -141,14 +141,18 @@ $appServicePlanName = "asp"
 az appservice plan create --name $appServicePlanName --resource-group $resourceGroup --custom-location $customLocationId --is-linux --per-site-scaling --sku K1
 $webAppUri = (az webapp create --name $appServiceName --plan $appServicePlanName --custom-location $customLocationId --resource-group $resourceGroup -i $image --query defaultHostName -o TSV)
 $webAppUri
+"https://$webAppUri/"
 
-$url = "http://$webAppUri/api/echo"
+$url = "https://$webAppUri/api/echo"
 $data = @{
     firstName = "John"
     lastName  = "Doe"
 }
 $body = ConvertTo-Json $data
 Invoke-RestMethod -Body $body -ContentType "application/json" -Method "POST" -DisableKeepAlive -Uri $url
+
+# Note: Check this url to see the forwarded headers:
+"https://$webAppUri/pages/echo"
 
 ###################
 # Create Logic App
