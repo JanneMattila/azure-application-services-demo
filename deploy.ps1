@@ -151,7 +151,8 @@ $data = @{
 $body = ConvertTo-Json $data
 Invoke-RestMethod -Body $body -ContentType "application/json" -Method "POST" -DisableKeepAlive -Uri $url
 
-# Note: Check this url to see the forwarded headers:
+# Note: Check this url to see the forwarded headers
+#       Check also the certificate provider!
 "https://$webAppUri/pages/echo"
 
 ###################
