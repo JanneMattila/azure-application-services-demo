@@ -42,7 +42,8 @@ az group create --name $resourceGroup --location $location -o table
 # Due to preview limitation: 
 # Must support LoadBalancer service type and provide a publicly addressable static IP
 # https://docs.microsoft.com/en-us/azure/app-service/overview-arc-integration#public-preview-limitations
-# Create AKS 
+# Create AKS
+# Note: For first time you'll need '--generate-ssh-keys'.
 az aks create --resource-group $resourceGroup --name $aksName --enable-aad --node-count 1 --enable-cluster-autoscaler --min-count 1 --max-count 3 --node-vm-size Standard_B2ms --max-pods 150
 $infraResourceGroup = (az aks show --resource-group $resourceGroup --name $aksName --query nodeResourceGroup --output tsv)
 $staticIp = (az network public-ip create --resource-group $infraResourceGroup --name MyPublicIP --sku STANDARD --query publicIp.ipAddress --output tsv)
@@ -60,7 +61,8 @@ az connectedk8s connect --name $arcName --resource-group $resourceGroup
 az connectedk8s list --resource-group $resourceGroup -o table
 
 # View Azure Arc agents in cluster
-kubectl get deployments, pods -n azure-arc
+kubectl get deployments -n azure-arc
+kubectl get pods -n azure-arc
 
 # Enable custom locations on cluster
 az connectedk8s enable-features --name $arcName --resource-group $resourceGroup --features cluster-connect custom-locations
