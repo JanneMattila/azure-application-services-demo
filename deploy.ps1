@@ -1,12 +1,17 @@
+# Change at least this!
+$yourName = "janne"
+
+# Other variables
 $aksName = "aks"
 $arcName = "aks-arc"
-$customLocationName = "jannewest"
+$customLocationName = "$($yourName)west"
 $resourceGroup = "rg-k8s-appsvc-demo"
+$workspaceName = "aks-workspace"
 $location = "westeurope"
 $namespace = "appservice-ns"
 $extensionInstanceName = "appsvcextension"
 $namespace = "appservice-ns"
-$kubeAppServiceEnvironment = "kube-ase"
+$kubeAppServiceEnvironment = "kube-ase-$customLocationName"
 
 # Login to Azure
 az login
@@ -39,12 +44,22 @@ az provider show -n Microsoft.ExtendedLocation -o table
 # Create new resource group
 az group create --name $resourceGroup --location $location -o table
 
+# Create Log Analytics workspace
+$workspaceId = (az monitor log-analytics workspace create --resource-group $resourceGroup --workspace-name $workspaceName --query id -o tsv)
+$workspaceKey = (az monitor log-analytics workspace get-shared-keys --resource-group $resourceGroup --workspace-name $workspaceName --query primarySharedKey -o tsv)
+$workspaceId
+
+# Prepare workspace related variables
+$workspaceIdBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($workspaceId))
+$workspaceKeyBase64 = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($workspaceKey))
+
 # Due to preview limitation: 
 # Must support LoadBalancer service type and provide a publicly addressable static IP
 # https://docs.microsoft.com/en-us/azure/app-service/overview-arc-integration#public-preview-limitations
 # Create AKS
-# Note: For first time you'll need '--generate-ssh-keys'.
-az aks create --resource-group $resourceGroup --name $aksName --enable-aad --node-count 1 --enable-cluster-autoscaler --min-count 1 --max-count 3 --node-vm-size Standard_B2ms --max-pods 150
+# Note: If you don't have ssh keys present, add this to create one:
+# --generate-ssh-keys
+az aks create --resource-group $resourceGroup --name $aksName --enable-aad --enable-addons monitoring --workspace-resource-id $workspaceId --node-count 1 --enable-cluster-autoscaler --min-count 1 --max-count 3 --node-vm-size Standard_B2ms --max-pods 150
 $infraResourceGroup = (az aks show --resource-group $resourceGroup --name $aksName --query nodeResourceGroup --output tsv)
 $staticIp = (az network public-ip create --resource-group $infraResourceGroup --name MyPublicIP --sku STANDARD --query publicIp.ipAddress --output tsv)
 $staticIp
@@ -84,10 +99,10 @@ $extensionId = az k8s-extension create -g $resourceGroup --name $extensionInstan
     --configuration-settings "buildService.storageClassName=default" `
     --configuration-settings "buildService.storageAccessMode=ReadWriteOnce" `
     --configuration-settings "customConfigMap=$namespace/kube-environment-config" `
-    --configuration-settings "envoy.annotations.service.beta.kubernetes.io/azure-load-balancer-resource-group=$resourceGroup" # `
-# --configuration-settings "logProcessor.appLogs.destination=log-analytics" `
-# --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.customerId=$logAnalyticsWorkspaceIdEnc" `
-# --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.sharedKey=$logAnalyticsKeyEnc"
+    --configuration-settings "envoy.annotations.service.beta.kubernetes.io/azure-load-balancer-resource-group=$resourceGroup" `
+    --configuration-settings "logProcessor.appLogs.destination=log-analytics" `
+    --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.customerId=$workspaceIdBase64" `
+    --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.sharedKey=$workspaceKeyBase64"
 
 # Verify install state
 # az k8s-extension show --name $extensionInstanceName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
@@ -147,7 +162,7 @@ az logicapp create --resource-group $resourceGroup --name wffromkube --custom-lo
 # Update url
 $logicAppUrl = "https://wffromkube.kube-ase-abcdefg.westeurope.k4apps.io:443/api/TemperatureConverter/triggers/manual/invoke"
 $logicAppData = @{
-    temperature  = 33
+    temperature = 33
 }
 $logicAppBody = ConvertTo-Json $logicAppData
 Invoke-RestMethod -Body $logicAppBody -ContentType "application/json" -Method "POST" -DisableKeepAlive -Uri $logicAppUrl
