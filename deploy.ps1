@@ -8,10 +8,11 @@ $customLocationName = "$($yourName)west"
 $resourceGroup = "rg-k8s-appsvc-demo"
 $workspaceName = "aks-workspace"
 $location = "westeurope"
-$namespace = "appservice-ns"
-$extensionInstanceName = "appsvcextension"
-$namespace = "appservice-ns"
+$appServiceNamespace = "appservice-ns"
+$appServiceExtensionName = "appsvcextension"
 $kubeAppServiceEnvironment = "kube-ase-$customLocationName"
+$apimExtensionName = "apimextension"
+$apimNamespace = "apim-ns"
 
 # Login to Azure
 az login
@@ -87,35 +88,35 @@ $connectedClusterId = (az connectedk8s show --name $arcName --resource-group $re
 $connectedClusterId
 
 # Enable Azure App Service on Azure Arc extension
-$extensionId = az k8s-extension create -g $resourceGroup --name $extensionInstanceName --query id -o tsv `
-    --cluster-type connectedClusters -c $arcName `
+$appServiceExtensionId = az k8s-extension create -g $resourceGroup --name $appServiceExtensionName --query id -o tsv `
+    --cluster-type connectedClusters --cluster-name $arcName `
     --extension-type 'Microsoft.Web.Appservice' --release-train stable --auto-upgrade-minor-version true `
-    --scope cluster --release-namespace $namespace `
+    --scope cluster --release-namespace $appServiceNamespace `
     --configuration-settings "Microsoft.CustomLocation.ServiceAccount=default" `
-    --configuration-settings "appsNamespace=$namespace" `
+    --configuration-settings "appsNamespace=$appServiceNamespace" `
     --configuration-settings "clusterName=$kubeAppServiceEnvironment" `
     --configuration-settings "loadBalancerIp=$staticIp" `
     --configuration-settings "keda.enabled=true" `
     --configuration-settings "buildService.storageClassName=default" `
     --configuration-settings "buildService.storageAccessMode=ReadWriteOnce" `
-    --configuration-settings "customConfigMap=$namespace/kube-environment-config" `
+    --configuration-settings "customConfigMap=$appServiceNamespace/kube-environment-config" `
     --configuration-settings "envoy.annotations.service.beta.kubernetes.io/azure-load-balancer-resource-group=$resourceGroup" `
     --configuration-settings "logProcessor.appLogs.destination=log-analytics" `
     --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.customerId=$workspaceIdBase64" `
     --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.sharedKey=$workspaceKeyBase64"
 
 # Verify install state
-# az k8s-extension show --name $extensionInstanceName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
-# az k8s-extension show --name $extensionInstanceName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup
-az resource wait --ids $extensionId --custom "properties.installState!='Pending'" --api-version "2020-07-01-preview"
+# az k8s-extension show --name $appServiceExtensionName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
+# az k8s-extension show --name $appServiceExtensionName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup
+az resource wait --ids $appServiceExtensionId --custom "properties.installState!='Pending'" --api-version "2020-07-01-preview"
 
 # List different resources from cluster
-kubectl get all -n $namespace
-kubectl get pods -n $namespace -l !app
+kubectl get all -n $appServiceNamespace
+kubectl get pods -n $appServiceNamespace -l !app
 kubectl get svc -A
 
 # Create custom location
-az customlocation create -n $customLocationName --resource-group $resourceGroup --namespace $namespace --host-resource-id $connectedClusterId --cluster-extension-ids $extensionId
+az customlocation create -n $customLocationName --resource-group $resourceGroup --namespace $appServiceNamespace --host-resource-id $connectedClusterId --cluster-extension-ids $appServiceExtensionId
 $customLocationId = (az customlocation show -n $customLocationName --resource-group $resourceGroup --query id -o tsv)
 $customLocationId
 
@@ -171,6 +172,24 @@ $logicAppData = @{
 }
 $logicAppBody = ConvertTo-Json $logicAppData
 Invoke-RestMethod -Body $logicAppBody -ContentType "application/json" -Method "POST" -DisableKeepAlive -Uri $logicAppUrl
+
+########################
+# Create API Management
+########################
+$apimConfigurationUrl = "https://<yourapim>.management.azure-api.net/subscriptions/<yoursub>/resourceGroups/<yourapimrg>/providers/Microsoft.ApiManagement/service/<yourapim>?api-version=2019-12-01"
+$apimAuthKey = "GatewayKey <name>&<token>"
+
+$apimExtensionId = az k8s-extension create -g $resourceGroup --name $apimExtensionName --query id -o tsv `
+    --cluster-type connectedClusters --cluster-name $arcName `
+    --extension-type Microsoft.ApiManagement.Gateway --release-train preview `
+    --scope namespace --target-namespace $apimNamespace `
+    --configuration-settings "gateway.endpoint=$apimConfigurationUrl" `
+    --configuration-protected-settings "gateway.authKey=$apimAuthKey"
+
+# Verify install state
+# az k8s-extension show --name $apimExtensionName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
+# az k8s-extension show --name $apimExtensionName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup
+az resource wait --ids $apimExtensionId --custom "properties.installState!='Pending'" --api-version "2020-07-01-preview"
 
 # Wipe out the resources
 az group delete --name $resourceGroup -y
