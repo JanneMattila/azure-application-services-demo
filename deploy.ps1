@@ -132,9 +132,9 @@ az appservice kube show `
     --resource-group $resourceGroup `
     --name $kubeAppServiceEnvironment
 
-####################
-# Create App Service
-####################
+#############################
+# Create App Service 1: Echo
+#############################
 $image = "jannemattila/echo"
 $appServiceName = "echofromkube"
 $appServicePlanName = "asp"
@@ -155,6 +155,27 @@ Invoke-RestMethod -Body $body -ContentType "application/json" -Method "POST" -Di
 # Note: Check this url to see the forwarded headers
 #       Check also the certificate provider!
 "https://$webAppUri/pages/echo"
+
+
+###############################################
+# Create App Service 2: Web app network tester
+###############################################
+$image2 = "jannemattila/webapp-network-tester"
+$appServiceName2 = "networktesterfromkube"
+$appServicePlanName2 = "asp2"
+
+az appservice plan create --name $appServicePlanName2 --resource-group $resourceGroup --custom-location $customLocationId --is-linux --per-site-scaling --sku K1
+$webAppUri2 = (az webapp create --name $appServiceName2 --plan $appServicePlanName2 --custom-location $customLocationId --resource-group $resourceGroup -i $image2 --query defaultHostName -o TSV)
+$webAppUri2
+"https://$webAppUri2/"
+
+$url2 = "https://$webAppUri2/api/commands"
+$commands = @"
+HTTP POST "http://<yourtargetaddress/" "CustomHeader=true"
+"@
+
+$body = ConvertTo-Json $data
+Invoke-RestMethod -Body $commands -Method "POST" -DisableKeepAlive -Uri $url2
 
 ###################
 # Create Logic App
