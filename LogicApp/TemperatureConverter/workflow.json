@@ -8,9 +8,20 @@
                 "inputs": {
                     "statusCode": 200,
                     "body": {
-                        "temperature": 55,
+                        "temperature": "@outputs('Execute_JavaScript_Code')",
                         "unit": "Celsius"
                     }
+                },
+                "runAfter": {
+                    "Execute_JavaScript_Code": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Execute_JavaScript_Code": {
+                "type": "JavaScriptCode",
+                "inputs": {
+                    "code": "let t = workflowContext.trigger.outputs.body.temperature;\r\nreturn (t - 32) * 5 / 9;"
                 },
                 "runAfter": {}
             }
