@@ -13,6 +13,8 @@ $appServiceExtensionName = "appsvcextension"
 $kubeAppServiceEnvironment = "kube-ase-$customLocationName"
 $apimExtensionName = "apimextension"
 $apimNamespace = "apim-ns"
+$eventGridExtensionName = "eventgridextension"
+$eventGridNamespace = "eventgrid-ns"
 
 # Login to Azure
 az login
@@ -156,7 +158,6 @@ Invoke-RestMethod -Body $body -ContentType "application/json" -Method "POST" -Di
 #       Check also the certificate provider!
 "https://$webAppUri/pages/echo"
 
-
 ###############################################
 # Create App Service 2: Web app network tester
 ###############################################
@@ -211,6 +212,33 @@ $apimExtensionId = az k8s-extension create -g $resourceGroup --name $apimExtensi
 # az k8s-extension show --name $apimExtensionName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
 # az k8s-extension show --name $apimExtensionName --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup
 az resource wait --ids $apimExtensionId --custom "properties.installState!='Pending'" --api-version "2020-07-01-preview"
+
+####################
+# Create Event Grid
+####################
+# Note: Using *unsecure* http setup!
+$eventGridExtensionId = az k8s-extension create -g $resourceGroup --name $eventGridExtensionName --query id -o tsv `
+    --cluster-type connectedClusters --cluster-name $arcName `
+    --extension-type 'Microsoft.EventGrid' --release-train stable --auto-upgrade-minor-version true `
+    --scope cluster --release-namespace $eventGridNamespace `
+    --configuration-settings "Microsoft.CustomLocation.ServiceAccount=eventgrid-operator" `
+    --configuration-settings "eventgridbroker.service.serviceType=ClusterIP" `
+    --configuration-settings "eventgridbroker.service.supportedProtocols[0]=http" `
+    --configuration-settings "eventgridbroker.dataStorage.size=1Gi" `
+    --configuration-settings "eventgridbroker.dataStorage.storageClassName=azurefile" `
+    --configuration-settings "eventgridbroker.diagnostics.metrics.reporterType=prometheus" `
+    --configuration-settings "eventgridbroker.resources.limits.memory=1Gi" `
+    --configuration-settings "eventgridbroker.resources.requests.memory=200Mi"
+
+# Verify install state
+# az k8s-extension show --name $eventGridExtensionId --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup --query installState -o tsv
+# az k8s-extension show --name $eventGridExtensionId --cluster-type connectedClusters -c $arcName --resource-group $resourceGroup -o json
+az resource wait --ids $eventGridExtensionId --custom "properties.installState!='Pending'" --api-version "2020-07-01-preview"
+
+# Validate Event Grid resources
+kubectl get all -n $eventGridNamespace -o wide
+
+# https://docs.microsoft.com/en-us/azure/event-grid/kubernetes/create-topic-subscription
 
 # Wipe out the resources
 az group delete --name $resourceGroup -y
